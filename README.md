@@ -1,4 +1,4 @@
-# 🛒 ShopVista E-Commerce Data Pipeline — Azure End-to-End
+# 🛒 ShopVista E-Commerce Data Pipeline - Azure End-to-End
 
 ## 📌 Project Overview
 
@@ -263,19 +263,3 @@ Dashboards consume:
 
 ---
 
-## 📈 Future Enhancements
-
-- CI/CD integration using Azure DevOps
-- Data quality monitoring with expectations framework
-- Real-time streaming dashboards
-- Automated alerting and pipeline monitoring
-- Infrastructure as Code (Terraform)
-
----
-
-## 👨‍💻 Author
-
-**Ajith Kumar Balamurugan**
-
-- Master’s in Data Science — University of South Australia
-- Data Engineering | Azure | Databricks | PySpark | SQL | Power BI
