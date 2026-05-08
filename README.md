@@ -201,18 +201,18 @@ Derived metrics:
 
 ```text
 ├── notebooks/
-│   ├── bronze/
-│   │   ├── ingest_dim_bronze.ipynb
-│   │   └── ingest_fact_bronze.ipynb
-│   ├── silver/
-│   │   ├── dim_bronze_to_silver.ipynb
-│   │   └── fact_bronze_to_silver.ipynb
-│   └── gold/
-│       ├── dim_silver_to_gold.ipynb
-│       ├── fact_silver_to_gold.ipynb
+│   ├── setup/
+│   │   ├── setup_catalog.ipynb
+│   │   └── setup_raw_external_volume.ipynb
+│   ├── medallion_processing_dim/
+│   │   ├── dim_bronze.ipynb
+│   │   └── dim_silver.ipynb
+│   │   └── dim_gold.ipynb
+│   └── medallion_processing_fact/
+│       ├── fact_bronze.ipynb
+│       ├── fact_silver.ipynb
+│       ├── fact_gold.ipynb
 │       └── daily_summary.ipynb
-├── setup/
-│   └── unity_catalog_setup.sql
 ├── project_architecture.png
 ├── ecommerce_analytics_report.jpg
 └── README.md
