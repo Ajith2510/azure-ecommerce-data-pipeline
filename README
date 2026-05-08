@@ -24,9 +24,7 @@ Azure Databricks + Unity Catalog
 
 Full architecture diagram:
 
-
-
-
+![Architecture Diagram](project_architecture.png)
 
 ## 📦 Tech Stack
 
