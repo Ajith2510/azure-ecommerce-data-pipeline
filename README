@@ -1,0 +1,186 @@
+#🛒 ShopVista E-Commerce Data Pipeline — Azure End-to-End
+
+## 📌 Project Overview
+An end-to-end data engineering pipeline built on Azure, processing raw e-commerce transactional data from the ShopVista OLTP system into analytics-ready Gold layer tables using the Medallion Architecture (Bronze → Silver → Gold).
+The pipeline handles both historical full loads (Jan 2024 – Aug 2025) and daily incremental ingestion (Aug 2025 – Dec 2025), with governance managed through Unity Catalog.
+
+## 🏗️ Architecture
+ShopVista (OLTP)
+      │
+      ▼ CSV
+Azure Data Lake Storage (ADLS)
+      │
+      ▼ Access Connector (Secure Access)
+Azure Databricks + Unity Catalog
+      │
+      ├──▶ Bronze Layer  (Raw ingestion — Delta tables)
+      │
+      ├──▶ Silver Layer  (Cleaned & validated — Delta tables)
+      │
+      └──▶ Gold Layer    (Business-ready aggregations — Delta tables)
+                │
+                ▼
+           Power BI (Analytics & Reporting)
+
+Full architecture diagram:
+
+
+
+
+
+## 📦 Tech Stack
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| **Cloud Storage** | Azure Data Lake Storage Gen2 (ADLS) | Scalable cloud-based data storage |
+| **Processing** | Azure Databricks (PySpark, SQL) | Distributed ETL and big data processing |
+| **Streaming Ingestion** | Auto Loader (`cloudFiles`) + Structured Streaming | Incremental and real-time data ingestion |
+| **Table Format** | Delta Lake | ACID transactions, Time Travel, and Change Data Feed (CDF) |
+| **Governance** | Unity Catalog | Centralized governance using Catalog → Schema → Tables |
+| **Orchestration** | Databricks Jobs & Pipelines | Scheduled daily workflow execution and refresh |
+| **Reporting** | Power BI | Interactive dashboards and business reporting |
+| **Languages** | Python (PySpark), SQL | Data engineering and transformation logic |
+
+
+
+📂 Data Model
+Source Tables (ShopVista)
+Dimension Tables (historical full load)
+
+brands, category, products, customers, date
+
+Fact Tables (incremental daily load from Aug 2025)
+
+order_items, order_returns, order_shipments
+
+Medallion Layers
+ecommerce (catalog)
+├── raw          → External volume pointing to ADLS raw landing zone
+├── bronze       → brz_brands, brz_categories, brz_products,
+│                  brz_customers, brz_dates, brz_order_items
+├── silver       → slv_brands, slv_category, slv_products,
+│                  slv_customers, slv_order_items
+└── gold         → gld_dim_products, gld_dim_customers,
+                   gld_fact_order_items, gld_fact_daily_orders_summary
+
+🔄 Pipeline Details
+1. Bronze Layer — Raw Ingestion
+Dimension tables are ingested from raw CSV files stored in ADLS into Delta tables with:
+
+Defined PySpark schema per table
+Metadata columns: _source_file, ingested_at (for lineage and auditing)
+Write mode: overwrite with schema merge
+
+Fact tables are ingested using Auto Loader (Structured Streaming):
+
+cloudFiles format for incremental file detection
+Schema inference and evolution enabled
+_rescued_data column captures unexpected schema changes safely
+Checkpointing for fault-tolerance and exactly-once processing
+Append mode into ecommerce.bronze.brz_order_items
+
+
+2. Silver Layer — Cleansing & Transformation
+Dimension cleansing:
+
+Trimming whitespace from string columns
+Removing special characters from identifier fields
+Standardizing inconsistent category codes via replacement dictionary
+Deduplication using groupBy() + dropDuplicates()
+
+Fact cleansing (order_items):
+
+Converting text numerics (e.g., "Two" → 2)
+Stripping $ and % symbols from price/discount columns
+Normalizing coupon_code (trim + lowercase)
+Standardizing channel values (web → Website, app → Mobile)
+Adding processed_time for transformation tracking
+
+Incremental upsert strategy using Structured Streaming + foreachBatch:
+
+Delta Lake MERGE (upsert) on composite key (order_id, item_seq)
+Change Data Feed (CDF) enabled on Silver fact table
+Checkpointing for recovery
+
+
+3. Gold Layer — Business-Ready Tables
+Dimension enrichment:
+
+gld_dim_products: Joined product + brand + category; COALESCE for null handling
+gld_dim_customers: Country–state–region mapping via PySpark dictionary join, deriving region attribute
+
+Fact aggregation (order_items → Gold):
+Derived metrics:
+
+gross_amount = quantity × unit_price
+discount_amount = derived from discount_pct
+net_amount = gross_amount − discount_amount + tax
+coupon_flag = boolean indicator for coupon usage
+
+Incremental load via Structured Streaming + foreachBatch with CDF on Silver (processes insert and update_postimage only).
+Daily Summary Table (gld_fact_daily_orders_summary):
+
+Aggregates total quantity, gross amount, discount, tax, net sales by date_id and currency
+Dynamic filter: last N days for incremental refresh
+Delta MERGE upsert on subsequent runs; auto clustering for query optimization
+
+
+4. Orchestration
+JobTriggerNotebooksdaily_refresh_dimScheduled dailyDimension Bronze → Silver → Golddaily_refresh_factScheduled dailyFact Bronze → Silver → Golddaily_refresh_allScheduled dailyCombined dim + fact pipeline
+
+5. Governance (Unity Catalog)
+
+Access Connector set up for secure ADLS access from Databricks
+External Location configured for raw data volume
+Catalog → Schema → Tables structure enforced across all layers
+Data access control and metadata management via Unity Catalog
+
+
+🗂️ Repository Structure
+├── notebooks/
+│   ├── bronze/
+│   │   ├── ingest_dim_bronze.ipynb
+│   │   └── ingest_fact_bronze.ipynb
+│   ├── silver/
+│   │   ├── dim_bronze_to_silver.ipynb
+│   │   └── fact_bronze_to_silver.ipynb
+│   └── gold/
+│       ├── dim_silver_to_gold.ipynb
+│       ├── fact_silver_to_gold.ipynb
+│       └── daily_summary.ipynb
+├── setup/
+│   └── unity_catalog_setup.sql
+├── architecture.png
+└── README.md
+
+🚀 How to Run
+Prerequisites
+
+Azure subscription with ADLS Gen2 and Databricks workspace
+Unity Catalog enabled on Databricks
+Access Connector configured between Databricks and ADLS
+
+Setup Steps
+
+Upload raw data to ADLS raw landing container
+Run Unity Catalog setup (setup/unity_catalog_setup.sql) to create catalog, schemas, and external volume
+Execute notebooks in order:
+
+Bronze ingestion (dim → fact)
+Silver transformation (dim → fact)
+Gold aggregation (dim → fact → daily summary)
+
+
+Configure Databricks Jobs for daily_refresh_dim and daily_refresh_fact
+Connect Power BI to Gold layer Delta tables via Databricks connector
+
+
+💡 Key Design Decisions
+DecisionReasonAuto Loader for fact ingestionScalable incremental file detection without manual trackingDelta Lake for all layersACID compliance, time travel, schema evolutionChange Data Feed on Silver/GoldEnables efficient incremental processing downstreamforeachBatch + MERGE patternHandles late-arriving data and upserts reliablyUnity Catalog governanceCentralized access control and metadata across all layersDaily summary pre-aggregationReduces query load on Power BI, improves dashboard performance
+
+📊 Power BI Integration
+Gold layer Delta tables are connected to Power BI via the Azure Databricks connector. Dashboards consume:
+
+gld_dim_products, gld_dim_customers for dimension context
+gld_fact_order_items for transaction-level analysis
+gld_fact_daily_orders_summary for daily KPI tracking
